@@ -57,7 +57,7 @@ jobs:
 
         - name: Wait for all images to be available
           run: |
-            sleep 15  # initial wait before checking
+            sleep 30  # initial wait before checking
             REGISTRY="ghcr.io/dolvladzio"
 
             echo "⏳Checking images"
