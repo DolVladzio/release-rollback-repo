@@ -57,13 +57,13 @@ jobs:
 
         - name: Wait for all images to be available
           run: |
-            VERSION="${{ steps.vars.outputs.VERSION }}"
+            sleep 15  # initial wait before checking
             REGISTRY="ghcr.io/dolvladzio"
 
-            echo "Checking app-1, app-2, app-3 version $VERSION"
+            echo "⏳Checking images"
 
-            for i in 1 2 3; do
-              IMAGE="$REGISTRY/app-$i:$VERSION"
+            for i in {1..3}; do
+              IMAGE="$REGISTRY/app-$i:${VERSION}"
               echo "Waiting for $IMAGE ..."
 
               # retry logic: 30 attempts x 5 sec = 150 sec max wait
