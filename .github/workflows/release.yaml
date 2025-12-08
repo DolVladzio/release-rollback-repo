@@ -1,0 +1,46 @@
+name: Release Workflow
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. v1.2.3)'
+        required: true
+        type: string
+
+jobs:
+    create-release-tag:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Create tags in repos
+          env:
+            ORG: dolvladzio
+            REPOS: "app-1"
+            VERSION: ${{ github.event.inputs.version }}
+            PAT: ${{ secrets.PAT }}
+          run: |
+            for repo in $REPOS; do
+              echo "Tagging $repo with $VERSION"
+              # Find default branch sha:
+              BRANCH=$(curl -s -H "Authorization: token $PAT" \
+                "https://api.github.com/repos/$ORG/$repo" | jq -r .default_branch)
+              SHA=$(curl -s -H "Authorization: token $PAT" \
+                "https://api.github.com/repos/$ORG/$repo/git/refs/heads/$BRANCH" | jq -r .object.sha)
+
+              # Try to create tag ref (if exists, skip)
+              curl -sS -X POST -H "Authorization: token $PAT" \
+                -d "{\"ref\":\"refs/tags/${VERSION}\",\"sha\":\"${SHA}\"}" \
+                "https://api.github.com/repos/$ORG/$repo/git/refs" || echo "tag exists or error"
+            done
+
+    deploy-release:
+      needs: create-release-tag
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Success!
+          run: echo "✅Release - ${{ github.event.inputs.version }} deployed to all repositories."
