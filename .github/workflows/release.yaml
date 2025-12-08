@@ -7,6 +7,9 @@ on:
         required: true
         type: string
 
+env:
+  VERSION: ${{ github.event.inputs.version }}
+
 jobs:
     create-release-tag:
       runs-on: ubuntu-latest
@@ -18,7 +21,6 @@ jobs:
           env:
             ORG: dolvladzio
             REPOS: "app-1 app-2 app-3"
-            VERSION: ${{ github.event.inputs.version }}
             PAT: ${{ secrets.PAT }}
           run: |
             for repo in $REPOS; do
@@ -47,6 +49,34 @@ jobs:
                       \"prerelease\": false
                     }" || echo "Release exists or error"
             done
+
+        - name: Check if images have been pushed successfully
+          env:
+            REGISTRY: ghcr.io/dolvladzio
+            IMAGES: "app-1 app-2 app-3"
+            TIMEOUT: 300
+            INTERVAL: 10
+          run: |
+            sleep 15  # Initial wait before checking
+            for image in "${IMAGES[@]}"; do
+              echo "Checking $REGISTRY/$image:$VERSION"
+              ELAPSED=0
+              while [ $ELAPSED -lt $TIMEOUT ]; do
+                if docker manifest inspect "$REGISTRY/$image:$VERSION" > /dev/null 2>&1; then
+                  echo "✅ Found $REGISTRY/$image:$VERSION"
+                  break
+                fi
+                echo "Waiting for $REGISTRY/$image:$VERSION ..."
+                sleep $INTERVAL
+                ELAPSED=$((ELAPSED + INTERVAL))
+              done
+              if [ $ELAPSED -ge $TIMEOUT ]; then
+                echo "❌ Timeout waiting for $REGISTRY/$image:$VERSION"
+                exit 1
+              fi
+            done
+
+            echo "✅All images exist!"
 
     deploy-release:
       needs: create-release-tag
