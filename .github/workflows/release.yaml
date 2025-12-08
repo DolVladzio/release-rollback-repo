@@ -62,7 +62,7 @@ jobs:
             echo "⏳Checking images"
 
             for i in ${REPOS}; do
-              IMAGE="${REGISTRY}/app-$i:${VERSION}"
+              IMAGE="${REGISTRY}/$i:${VERSION}"
               echo "Waiting for $IMAGE ..."
 
               # retry logic: 30 attempts x 5 sec = 150 sec max wait
