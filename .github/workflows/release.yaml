@@ -7,6 +7,16 @@ on:
         required: true
         type: string
 
+      rollback:
+        description: "Perform rollback instead of release"
+        type: boolean
+        default: false
+
+      maintenance:
+        description: "Enable maintenance mode during deployment"
+        type: boolean
+        default: true
+
 env:
   VERSION: ${{ github.event.inputs.version }}
   REGISTRY: "ghcr.io/dolvladzio"
@@ -84,12 +94,26 @@ jobs:
 
             echo "✅ All images are available!"
 
-    deploy-release:
-      needs: create-release-tag
+    maintenance:
+      if: ${{ inputs.maintenance }}
+      name: Maintenance Mode
       runs-on: ubuntu-latest
       steps:
         - name: Checkout code
           uses: actions/checkout@v4
 
-        - name: Success!
-          run: echo "✅Release - ${{ github.event.inputs.version }} deployed to all repositories."
+    deploy-release:
+      needs: create-release-tag
+      name: Deploy Release
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+    rollback-release:
+      if : ${{ inputs.rollback }}
+      name: Rollback Release
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
