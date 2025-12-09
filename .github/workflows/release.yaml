@@ -141,7 +141,15 @@ jobs:
                 "version": "${{ env.VERSION }}"
               }
 
-        # - name: Wait for workflow to complete
+        - name: Wait for workflow to complete
+          uses: dawidd6/action-wait-for-workflow@v2
+          with:
+            workflow: Release Workflow
+            repo: ${{ github.actor }}/app-charts
+            ref: main
+            token: ${{ secrets.PAT }}
+            check-interval-seconds: 15
+            timeout-seconds: 1800
 
     rollback-release:
       if: ${{ inputs.rollback }}
@@ -162,17 +170,23 @@ jobs:
             version: 'latest'
 
         - name: Rollback to ${{ env.VERSION }} version
-          run: |
-            for i in ${{ env.REPOS}}; do
-              echo "Rolling back $i version ${{ env.VERSION }} to ${{ env.ENVIRONMENT }}"
+          uses: peter-evans/repository-dispatch@v3
+          with:
+            token: ${{ secrets.PAT }}
+            repository: ${{ github.actor }}/app-charts
+            event-type: charts-deployment-trigger
+            client-payload: |
+              {
+                "environment": "${{ env.ENVIRONMENT }}",
+                "version": "${{ env.VERSION }}"
+              }
 
-                if helm upgrade --install app-$i ./charts-repo/app-$i \
-                  --namespace ${{ env.ENVIRONMENT }} \
-                  --set image.tag=${{ env.VERSION }} \
-                  charts/$i ; then
-                  echo "✅ Rolled back $i successfully"
-                else
-                  echo "❌ Roll back $i failed"
-                  exit 1
-                fi
-            done
+        - name: Wait for workflow to complete
+          uses: dawidd6/action-wait-for-workflow@v2
+          with:
+            workflow: Release Workflow
+            repo: ${{ github.actor }}/app-charts
+            ref: main
+            token: ${{ secrets.PAT }}
+            check-interval-seconds: 15
+            timeout-seconds: 1800
