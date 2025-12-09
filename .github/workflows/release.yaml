@@ -129,7 +129,7 @@ jobs:
       name: Deploy Release
       runs-on: ubuntu-latest
       steps:
-        - name: Trigger the Ansible runner
+        - name: Trigger the App Charts runner
           uses: peter-evans/repository-dispatch@v3
           with:
             token: ${{ secrets.PAT }}
@@ -140,6 +140,8 @@ jobs:
                 "environment": "${{ env.ENVIRONMENT }}",
                 "version": "${{ env.VERSION }}"
               }
+
+        # - name: Wait for workflow to complete
 
     rollback-release:
       if: ${{ inputs.rollback }}
