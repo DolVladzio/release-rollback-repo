@@ -2,20 +2,39 @@ name: Release Workflow
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
       version:
         description: 'Release version (e.g. v1.2.3)'
         required: true
         type: string
 
+      tag-release:
+          description: "Tag the release in all repos"
+          type: boolean
+          default: true
+
+      maintenance:
+          description: "Enable maintenance mode during deployment"
+          type: boolean
+          default: true
+      
+      deploy-release:
+          description: "Deploy the release after tagging"
+          type: boolean
+          default: true
+
       rollback:
         description: "Perform rollback instead of release"
         type: boolean
         default: false
-
-      maintenance:
-        description: "Enable maintenance mode during deployment"
-        type: boolean
-        default: true
 
 env:
   VERSION: ${{ github.event.inputs.version }}
@@ -23,9 +42,11 @@ env:
   ORG: "dolvladzio"
   REPOS: "app-1 app-2 app-3"
   PAT: ${{ secrets.PAT }}
+  ENVIRONMENT: ${{ inputs.environment }}
 
 jobs:
     create-release-tag:
+      if: ${{ inputs.tag-release }}
       runs-on: ubuntu-latest
       steps:
         - name: Checkout code
@@ -94,15 +115,16 @@ jobs:
 
             echo "✅ All images are available!"
 
-    maintenance:
-      if: ${{ inputs.maintenance }}
-      name: Maintenance Mode
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
+    # maintenance:
+    #   if: ${{ inputs.maintenance }}
+    #   name: Maintenance Mode
+    #   runs-on: ubuntu-latest
+    #   steps:
+    #     - name: Checkout code
+    #       uses: actions/checkout@v4
 
     deploy-release:
+      if: ${{ inputs.deploy-release }}
       needs: create-release-tag
       name: Deploy Release
       runs-on: ubuntu-latest
@@ -110,10 +132,90 @@ jobs:
         - name: Checkout code
           uses: actions/checkout@v4
 
+        - name: Helm install
+          uses: azure/setup-helm@v3
+          with:
+            version: v3.11.2
+
+        - name: Configure kubectl
+          uses: azure/setup-kubectl@v3
+          with:
+            version: 'latest'
+
+        - name: Helm diff plugin
+          run: |
+            helm plugin install https://github.com/databus23/helm-diff
+
+        - name: Configure Kubeconfig
+          run: |
+            
+
+        - name: Helm diff check
+          run: |
+            for i in ${{ env.REPOS}}; do
+              echo "Checking helm diff for $i"
+
+              if helm diff upgrade app-$i ./charts-repo/app-$i \
+                --namespace ${{ env.ENVIRONMENT }} \
+                --set image.repository=${{ env.REGISTRY }}/$i \
+                --set image.tag=${{ env.VERSION }} \
+                charts/$i; then
+                echo "✅ No changes detected for $i"
+              else
+                echo "❌ Changes detected for $i, aborting deployment"
+                exit 1
+              fi
+            done
+
+        - name: Deploy the ${{ env.VERSION }} version
+          run: |
+            for i in ${{ env.REPOS}}; do
+              echo "Deploying $i version ${{ env.VERSION }} to ${{ env.ENVIRONMENT }}"
+
+                if helm upgrade --install app-$i ./charts-repo/app-$i \
+                  --namespace ${{ env.ENVIRONMENT }} \
+                  --set image.repository=${{ env.REGISTRY }}/$i \
+                  --set image.tag=${{ env.VERSION }} \
+                  charts/$i \
+                  --wait --timeout 10m; then
+                  echo "✅ Deployed $i successfully"
+                else
+                  echo "❌ Deployment of $i failed"
+                  exit 1
+                fi
+            done
+
     rollback-release:
-      if : ${{ inputs.rollback }}
+      if: ${{ inputs.rollback }}
       name: Rollback Release
       runs-on: ubuntu-latest
       steps:
         - name: Checkout code
           uses: actions/checkout@v4
+
+        - name: Helm install
+          uses: azure/setup-helm@v3
+          with:
+            version: v3.11.2
+
+        - name: Configure kubectl
+          uses: azure/setup-kubectl@v3
+          with:
+            version: 'latest'
+
+        - name: Rollback to ${{ env.VERSION }} version
+          run: |
+            for i in ${{ env.REPOS}}; do
+              echo "Rolling back $i version ${{ env.VERSION }} to ${{ env.ENVIRONMENT }}"
+
+                if helm upgrade --install app-$i ./charts-repo/app-$i \
+                  --namespace ${{ env.ENVIRONMENT }} \
+                  --set image.repository=${{ env.REGISTRY }}/$i \
+                  --set image.tag=${{ env.VERSION }} \
+                  charts/$i ; then
+                  echo "✅ Rolled back $i successfully"
+                else
+                  echo "❌ Roll back $i failed"
+                  exit 1
+                fi
+            done
