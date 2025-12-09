@@ -1,4 +1,5 @@
 name: Hot Fix App Images
+
 on:
   workflow_call:
     inputs:
@@ -6,19 +7,20 @@ on:
         description: 'Version tag to build'
         required: true
         type: string
-      app-name:
-        description: 'Application name'
+      environment:
+        description: 'Environment to deploy to'
         required: true
         type: string
   workflow_dispatch:
 
 env:
   REGISTRY: "ghcr.io/dolvladzio"
-  APP_NAME: ${{ inputs.app-name }}
+  APP_NAME: ${{ github.event.repository.name }}
   VERSION: ${{ inputs.version }}
+  ENVIRONMENT: ${{ inputs.environment }}
 
 jobs:
-  build:
+  build-hot-fix-image:
     runs-on: ubuntu-latest
 
     permissions:
@@ -35,7 +37,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
@@ -49,3 +51,23 @@ jobs:
       - name: Check pushed image
         run: |
           docker manifest inspect ${{ env.REGISTRY }}/${{ env.APP_NAME }}:${{ env.VERSION }}
+
+  deploy-hot-fix:
+    needs: build-hot-fix-image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Hot Fix ${{ env.VERSION }} version
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.PAT }}
+          repository: ${{ github.actor }}/app-charts
+          event-type: charts-deployment-trigger
+          client-payload: |
+            {
+              "environment": "${{ env.ENVIRONMENT }}",
+              "version": "${{ env.VERSION }}"
+            }
